@@ -21,11 +21,11 @@ Il s'agit de déployer une petite stack “Web + DB” (Nginx + MariaDB) sur 2 n
 
 ## 🚀 Setup Vagrant (lab 3 VMs : controller + node1 + node2)
 
-Copiez ce **Vagrantfile** à la racine du projet (même dossier que `ansible.cfg`, etc.).
+Copiez ce **Vagrantfile** à la racine du projet.
 Il crée 3 VMs : `controller` (avec Ansible) + `node1` (web) + `node2` (db).  
 Le contrôleur génère une **clé SSH** partagée via le dossier synchronisé `./ssh`.
 
-> Réseau privé utilisé : `192.168.56.0/24` (modifiez au besoin).
+> Réseau privé utilisé : `192.168.56.1/24` (modifiez au besoin).
 
 ```ruby
 Vagrant.configure("2") do |config|
@@ -91,8 +91,7 @@ end
 
 **Démarrage :**
 ```bash
-$ vagrant up controller         # génère la clé SSH dans ./ssh/
-PS C:\Users\Administrateur\ansible-labs> vagrant.exe up controller
+PS C:\Users\Administrateur\ansible-labs> vagrant.exe up controller # génère la clé SSH dans ./ssh/
 Bringing machine 'controller' up with 'virtualbox' provider...
 ==> controller: Box 'ubuntu/jammy64' could not be found. Attempting to find and install...
     controller: Box Provider: virtualbox
@@ -131,7 +130,10 @@ Bringing machine 'node2' up with 'virtualbox' provider...
     node1: SSH username: vagrant
     node1: SSH auth method: private key
 ...................
+```
 
+**Démarrage :**
+```bash
 PS C:\Users\Administrateur\ansible-labs> vagrant.exe status
 Current machine states:
 
@@ -274,34 +276,26 @@ root@controller:/vagrant# mkdir -p inventories/dev/group_vars/
     - name: Afficher Les varaibles Group Vars
       debug:
         msg: "Env={{ app_env }}, Host={{ inventory_hostname }}, TZ={{ timezone }}"
-    - name: Installer paquets si Debian
-      package:
-        name: "{{ common_packages }}"
-        state: present
-      when: ansible_facts['os_family'] == "Debian"
 ```
 `Exécution` :
 
 ```bash
-root@controller:/vagrant# ansible-playbook playbooks/00_ping.yml
+root@controller:/vagrant# ansible-playbook playbooks/00_ping.yml 
 
-PLAY [Sanity checks] **********************************************************************************************************************************************************************
-TASK [Gathering Facts] ********************************************************************************************************************************************************************ok: [node2]
+PLAY [Premier Playbook] *******************************************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node2]
 ok: [node1]
 
-TASK [Ping All] ***************************************************************************************************************************************************************************ok: [node2]
+TASK [Ping All] ***************************************************************************************************************************************************************************************************************************ok: [node2]
 ok: [node1]
 
-TASK [Afficher Les varaibles Group Vars] **************************************************************************************************************************************************ok: [node1] => 
+TASK [Afficher Les varaibles Group Vars] **************************************************************************************************************************************************************************************************ok: [node1] => 
   msg: Env=dev, Host=node1, TZ=Europe/Paris
 ok: [node2] => 
   msg: Env=dev, Host=node2, TZ=Europe/Paris
 
-TASK [Installer paquets si Debian] ********************************************************************************************************************************************************ok: [node2]
-ok: [node1]
-
-PLAY RECAP ********************************************************************************************************************************************************************************node1                      : ok=4    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
-node2                      : ok=4    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node1                      : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+node2                      : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
 
 root@controller:/vagrant# 
 ```
@@ -314,6 +308,10 @@ root@controller:/vagrant#
   gather_facts: true
 
   tasks:
+    - name: Display os_family Fact
+      debug:
+       msg: "{{ ansible_facts['os_family'] }}"
+       
     - name: Installer des paquets communs (LISTE) - Debian only
       ansible.builtin.package:
         name: "{{ common_packages }}"
@@ -342,7 +340,32 @@ root@controller:/vagrant#
 `Exécution` :
 
 ```bash
-ansible-playbook playbooks/03_vault.yml --ask-vault-pass
+root@controller:/vagrant# ansible-playbook playbooks/01_setup_users.yml 
+
+PLAY [Baseline (common) + exemples listes/dicts/when] *************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node2]
+ok: [node1]
+
+TASK [Display os_family Fact] *************************************************************************************************************************************************************************************************************ok: [node1] => 
+  msg: Debian
+ok: [node2] => 
+  msg: Debian
+
+TASK [Installer des paquets communs (LISTE) - Debian only] ********************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+TASK [Créer des utilisateurs depuis DICTIONNAIRE] *****************************************************************************************************************************************************************************************ok: [node2] => (item={'key': 'alice', 'value': {'groups': ['sudo'], 'shell': '/bin/bash'}})
+ok: [node1] => (item={'key': 'alice', 'value': {'groups': ['sudo'], 'shell': '/bin/bash'}})
+ok: [node1] => (item={'key': 'bob', 'value': {'groups': ['www-data'], 'shell': '/bin/bash'}})
+ok: [node2] => (item={'key': 'bob', 'value': {'groups': ['www-data'], 'shell': '/bin/bash'}})
+
+TASK [Déployer un MOTD différent en dev] **************************************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node1                      : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+node2                      : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+root@controller:/vagrant# 
 ```
 ---
 
