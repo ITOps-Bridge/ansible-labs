@@ -3,16 +3,19 @@
 Ce document décrit pas à pas les **jalons** du TP Ansible (2 jours), de la **mise en place Vagrant**
 jusqu’à l’intégration dans **AWX** sur **k3s**.
 
-Il s'agit de déployer une petite stack “Web + DB” (Nginx + MariaDB) sur 2 nœuds Linux (Ubuntu/Debian), avec durcissement minimal, gestion d’utilisateurs, templating, variables hiérarchisées, rôles, collections, plugins, et finalement exécution via AWX.
+Il s'agit de déployer une petite stack “Web + DB” (Nginx + MariaDB) sur 2 nœuds Linux (Ubuntu), avec gestion d’utilisateurs, templating, variables hiérarchisées, rôles, collections, plugins, et finalement exécution via AWX.
 
 ---
 
 ## Pré-requis
 
 - **VirtualBox** (ou Hyper-V, adapter si besoin)
-- **Vagrant** (2.3+ recommandé)
-- 16 Go RAM minimum sur la machine hôte (idéalement 12–16 Go si vous lancez AWX + 3 VMs)
-- Accès Internet depuis la VM AWX pour récupérer k3s et l’operator
+- **Vagrant**
+- **Visual Studio Code**
+- **Git**
+- **Client SSH (Tabby)**
+- 16 Go RAM minimum sur la machine hôte (Windows Ou Linux)
+- Accès Internet
 
 ---
 
@@ -343,7 +346,7 @@ ansible-playbook playbooks/03_vault.yml --ask-vault-pass
 ```
 ---
 
-## Jalon 2 — Lookups & Vault
+## 📌 Jalon 2 — Lookups & Vault
 ### Ansible Vault
 `Crée un fichier vars/vault_users.yml` :
 ```yaml
@@ -424,7 +427,7 @@ ansible-playbook playbooks/01_setup_users_csv.yml
 ```
 ---
 
-## Jalon 3 — Collections, Modules & Rôle `common`
+## 📌 Jalon 3 — Collections, Modules & Rôle `common`
 But : standardiser préparation système via rôle common.
 
 Exemple rôle `roles/common/` 
@@ -498,7 +501,7 @@ ansible-playbook playbooks/01_setup_users.yml
 ```
 ---
 
-## Jalon 4 — Handlers
+## 📌 Jalon 4 — Handlers
 
 
 
@@ -513,7 +516,7 @@ Handler (exemple `roles/web/handlers/main.yml`) :
 
 ---
 
-## Jalon 5 — Rôle `web` (Nginx)
+## 📌 Jalon 5 — Rôle `web` (Nginx)
 
 `roles/web/defaults/main.yml` :
 ```yaml
@@ -578,7 +581,7 @@ ansible-playbook playbooks/04_web.yml
 ```
 ---
 
-## Jalon 6 — Rôle `db` (MariaDB)
+## 📌 Jalon 6 — Rôle `db` (MariaDB)
 
 `roles/db/defaults/main.yml` :
 
@@ -1024,8 +1027,3 @@ Voilà un schéma clair du flux AWX (qui fait quoi et dans quel ordre) :
 5. Vérifier l’**idempotence** (relancer sans changements)
 
 ---
-
-# ✅ Fin du TP
-- Idempotence vérifiée
-- Web + DB en place
-- Déploiement piloté par AWX (UI)
