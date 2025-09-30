@@ -1,0 +1,15 @@
+- name: Premier Playbook
+  hosts: all
+  gather_facts: true
+  become: yes
+  tasks:
+    - name: Ping All
+      ansible.builtin.ping:
+    - name: Afficher Les varaibles Group Vars
+      debug:
+        msg: "Env={{ app_env }}, Host={{ inventory_hostname }}, TZ={{ timezone }}"
+    - name: Installer paquets si Debian
+      package:
+        name: "{{ common_packages }}"
+        state: present
+      when: ansible_facts['os_family'] == "Debian"

@@ -1,0 +1,5 @@
+- name: System baseline via common role
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: common

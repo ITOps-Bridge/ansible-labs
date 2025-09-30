@@ -1,0 +1,29 @@
+- name: Baseline (common) + exemples listes/dicts/when
+  hosts: all
+  gather_facts: true
+
+  tasks:
+    - name: Installer des paquets communs (LISTE) - Debian only
+      ansible.builtin.package:
+        name: "{{ common_packages }}"
+        state: present
+      become: true
+      when: ansible_facts['os_family'] == "Debian"  # condition d'exemple
+
+    - name: Créer des utilisateurs depuis DICTIONNAIRE
+      ansible.builtin.user:
+        name: "{{ item.key }}"
+        shell: "{{ item.value.shell }}"
+        groups: "{{ item.value.groups | default([]) }}"
+        append: true
+        create_home: true
+      loop: "{{ users_map | dict2items }}"
+      become: true
+
+    - name: Déployer un MOTD différent en dev
+      ansible.builtin.copy:
+        dest: /etc/motd
+        content: "ENV={{ app_env }} | Host={{ inventory_hostname }} | Projet={{ project_name }}\n"
+        mode: '0644'
+      become: true
+      when: app_env == "dev"

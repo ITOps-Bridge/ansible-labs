@@ -1,0 +1,19 @@
+- name: Créer des utilisateurs à partir d'un CSV
+  hosts: all
+  become: true
+  vars:
+    users_file: "../files/users.csv"
+
+  tasks:
+    - name: Lire le CSV
+      set_fact:
+        csv_users: "{{ lookup('community.general.csvfile', users_file, dialect='excel', delimiter=',', key='username') }}"
+      delegate_to: localhost
+
+    - name: Créer les comptes utilisateurs
+      ansible.builtin.user:
+        name: "{{ item.key }}"
+        password: "{{ item.value.password | password_hash('sha512') }}"
+        groups: "{{ item.value.groups }}"
+        state: present
+      loop: "{{ csv_users | dict2items }}"

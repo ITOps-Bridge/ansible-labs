@@ -1,0 +1,4 @@
+username,password,groups
+alice,Azerty123!,sudo
+bob,ChangeMe123,www-data
+charlie,Passw0rd!,developers

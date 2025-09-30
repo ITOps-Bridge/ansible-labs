@@ -1,0 +1,17 @@
+project_name: "fil-rouge"
+timezone: "Europe/Paris"
+app_env: "dev"
+
+common_packages:
+  - git
+  - curl
+  - vim
+  - htop
+
+users_map:
+  alice:
+    groups: ["sudo"]
+    shell: /bin/bash
+  bob:
+    groups: ["www-data"]
+    shell: /bin/bash

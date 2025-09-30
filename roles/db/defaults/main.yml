@@ -1,0 +1,6 @@
+mariadb_bind_address: "0.0.0.0"
+mariadb_root_password: "change-me"  # sera override par vault.yml ou group_vars/db.yml
+db_app_name: "appdb"
+db_app_user: "appuser"
+db_app_password: ""
+db_app_host: "localhost"

@@ -1,0 +1,24 @@
+{
+  "name": "Fil Rouge - Survey",
+  "description": "Param\u00e9trage basique de la stack",
+  "spec": [
+    {
+      "question_name": "Environment",
+      "question_description": "dev / prod",
+      "required": true,
+      "type": "multiplechoice",
+      "variable": "app_env",
+      "default": "dev",
+      "choices": "dev\nprod"
+    },
+    {
+      "question_name": "Nginx listen port",
+      "required": true,
+      "type": "integer",
+      "variable": "nginx_listen_port",
+      "default": 8080,
+      "min": 1,
+      "max": 65535
+    }
+  ]
+}

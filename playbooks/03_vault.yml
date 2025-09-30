@@ -1,0 +1,14 @@
+- name: Créer un utilisateur dont le mot de passe est stocké dans Vault
+  hosts: all
+  become: true
+  vars_files:
+    - ../vars/vault_users.yml
+
+  tasks:
+    - name: Créer utilisateurs sécurisés
+      user:
+        name: "{{ item.name }}"
+        password: "{{ item.password | password_hash('sha512') }}" #on utilise le filter password_hash('sha512') pour transformer le mot de passe clair en hash Linux compatible (/etc/shadow).
+        groups: "{{ item.groups }}"
+        state: present
+      loop: "{{ vault_users }}"
