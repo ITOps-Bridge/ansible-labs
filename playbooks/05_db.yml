@@ -1,6 +1,0 @@
-- hosts: db
-  gather_facts: false
-  vars_files:
-    - ../vars/vault.yml
-  roles:
-    - db

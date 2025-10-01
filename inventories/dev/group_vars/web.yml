@@ -1,2 +1,2 @@
-nginx_listen_port: 8080
+nginx_listen_port: 80
 web_index_message: "Hello from {{ inventory_hostname }} / {{ app_env }}"

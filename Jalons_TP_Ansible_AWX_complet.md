@@ -237,8 +237,12 @@ node2 | SUCCESS => {
 ---
 
 ## 📌 Jalon 1 — Playbooks, Variables (listes, dictionnaires) Loops & conditions (when)
+- Creer le repertoire `inventories/dev/group_vars/`
+```bash
+root@controller:/vagrant# mkdir -p inventories/dev/group_vars/
+```
 
-`inventories/dev/group_vars/all.yml`
+- `inventories/dev/group_vars/all.yml`
 
 ```yaml
 project_name: "fil-rouge"
@@ -259,8 +263,25 @@ users_map:
     groups: ["www-data"]
     shell: /bin/bash
 ```
-```bash
-root@controller:/vagrant# mkdir -p inventories/dev/group_vars/
+
+- `inventories/dev/group_vars/web.yml`
+
+```yaml
+nginx_listen_port: 80
+web_index_message: "Hello from {{ inventory_hostname }} / {{ app_env }}"
+```
+
+- `inventories/dev/group_vars/db.yml`
+
+```yaml
+mariadb_bind_address: "0.0.0.0"
+# Secrets DB (exemple)
+db_app_name: "appdb"            # nom de la base
+db_app_user: "appuser"          # utilisateur applicatif
+db_app_password: "Str0ngPass!"  # MOT DE PASSE EN CLAIR (chiffré par le vault au repos)
+db_app_host: "localhost"             
+# (optionnel) surcharger le root si tu préfères le mettre aussi dans Vault :
+mariadb_root_password: "ChangeMeRoot"
 ```
 **Premier Playbook :**
 `Playbook 00_ping.yml` :
@@ -460,13 +481,13 @@ collections/  cp/           galaxy_cache/ galaxy_token  tmp/
 root@controller:/vagrant#
 ```
 ### Lookups
-`Crée un fichier files/motd.txt` :
+- Créer `un fichier files/motd.txt` :
 ```bash
 Bienvenue sur le serveur Ansible !
 ```
-- Ici chaque ligne = un utilisateur, avec son mot de passe en clair (le fichier sera ensuite protégé par Ansible Vault si nécessaire).
+- Creer le fichier `files/users.csv`. Ici chaque ligne = un utilisateur, avec son mot de passe.
 
-`Creer un playbook  playbooks/03_lookups.yml` :
+- Creer un playbook  `playbooks/03_collections_lookups.yml` :
 ```yaml
 - name: Manipulations Lookup
   hosts: all
@@ -500,13 +521,11 @@ Bienvenue sur le serveur Ansible !
       debug:
         msg: "{{ lookup('password', '/dev/null length=12 chars=ascii_letters') }}"
 ```
-- loop: "{{ csv_users | dict2items }}" permet de boucler sur chaque ligne (clé = username).
-- password_hash('sha512') est nécessaire car Ansible user.password attend un hash
 
 `Exécution` :
 
 ```bash
-root@controller:/vagrant# ansible-playbook playbooks/03_lookups.yml 
+root@controller:/vagrant# ansible-playbook playbooks/03_collections_lookups.yml 
 
 PLAY [Manipulations Lookup] *******************************************************************************************************************************************************************************************
 TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node1]
@@ -646,30 +665,23 @@ root@controller:/vagrant#
 ```
 ---
 
-## 📌 Jalon 4 — Handlers
-
-
-
-Handler (exemple `roles/web/handlers/main.yml`) :
-```yaml
-- name: restart nginx
-  service:
-    name: nginx
-    state: restarted
-  become: true
+## 📌 Jalon 4 — Handlers & Rôle `web` (Nginx)
+- Creer un nouveau `Role web`:
 ```
-
----
-
-## 📌 Jalon 5 — Rôle `web` (Nginx)
-
-`roles/web/defaults/main.yml` :
+root@controller:/vagrant# cd roles/
+root@controller:/vagrant/roles#  ansible-galaxy role init web
+Role web was created successfully
+root@controller:/vagrant/roles# ls web/
+README.md  defaults  files  handlers  meta  tasks  templates  tests  vars
+root@controller:/vagrant/roles#
+```
+- `roles/web/defaults/main.yml` :
 ```yaml
 nginx_listen_port: 8080
 server_name: "{{ inventory_hostname }}"
 ```
 
-`roles/web/tasks/main.yml` : 
+- `roles/web/tasks/main.yml` : 
 ```yaml
 - name: Install nginx
   package:
@@ -698,7 +710,16 @@ server_name: "{{ inventory_hostname }}"
   become: true
 ```
 
-`roles/web/templates/nginx.conf.j2 (minimal HTTP)` :
+- Handler `roles/web/handlers/main.yml` :
+```yaml
+- name: restart nginx
+  service:
+    name: nginx
+    state: restarted
+  become: true
+```
+
+- `roles/web/templates/nginx.conf.j2 (minimal HTTP)` :
 ```
 server {
   listen {{ nginx_listen_port }};
@@ -712,27 +733,58 @@ server {
   }
 }
 ```
-`playbooks/04_web.yml` :
+- `playbooks/05_web.yml` :
 ```yaml
 - hosts: web
   gather_facts: false
   roles:
-    - web
+  - role: web
 ```
-
-`Execution`: 
+- Encrypter avec Ansible Vault les vars du role db
 ```bash
-ansible-playbook playbooks/04_web.yml
+root@controller:/vagrant# ansible-vault encrypt inventories/dev/group_vars/db.yml
+New Vault password:
+Confirm New Vault password:
+Encryption successful
+root@controller:/vagrant# ansible-vault edit inventories/dev/group_vars/db.yml
+Vault password:
+root@controller:/vagrant# 
+```
+- `Execution`: 
+```bash
+root@controller:/vagrant# ansible-playbook playbooks/05_web.yml 
+
+PLAY [web] ********************************************************************************************************************************************************************************************************************************
+TASK [web : Install nginx] ****************************************************************************************************************************************************************************************************************changed: [node1]
+
+TASK [web : Push nginx.conf] **************************************************************************************************************************************************************************************************************changed: [node1]
+
+TASK [web : Place index.html] *************************************************************************************************************************************************************************************************************changed: [node1]
+
+TASK [web : Ensure nginx started] *********************************************************************************************************************************************************************************************************ok: [node1]
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node1                      : ok=4    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
 ```
 ---
 
-## 📌 Jalon 6 — Rôle `db` (MariaDB)
+- Acceder à votre serveur nginx via cette URL: http://192.168.56.111/
 
+## 📌 Jalon 6 — Rôle `db` (MariaDB)
+- Creer un nouveau `Role db`:
+```
+root@controller:/vagrant# ansible-galaxy role init roles/db
+- Role roles/db was created successfully
+root@controller:/vagrant# ls roles/
+common  db  web
+root@controller:/vagrant# ls roles/db/
+README.md  defaults  files  handlers  meta  tasks  templates  tests  vars
+root@controller:/vagrant# 
+```
 `roles/db/defaults/main.yml` :
 
 ```yaml
 mariadb_bind_address: "0.0.0.0"
-mariadb_root_password: "change-me"  # sera override par vault.yml ou group_vars/db.yml
+mariadb_root_password: "change-me"  # sera override par vars/vault.yml ou group_vars/db.yml
 db_app_name: "appdb"
 db_app_user: "appuser"
 db_app_password: ""
@@ -767,16 +819,16 @@ db_app_host: "localhost"
     state: present
   become: true
 
-- name: Secure root password (idempotent)
+- name: Set root password using unix_socket
   community.mysql.mysql_user:
-    login_user: root
-    login_password: ""
     name: root
     host_all: true
     password: "{{ mariadb_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
     check_implicit_admin: true
     state: present
   become: true
+
 - name: Ensure application database exists
   community.mysql.mysql_db:
     name: "{{ db_app_name }}"
@@ -822,21 +874,86 @@ bind-address = {{ mariadb_bind_address }}
     - db
 ```
 
-`Mettre les secrets DB dans le vault (chiffré)`: 
+- `Mettre les secrets DB dans le vault (chiffré)`: 
 ```bash
 ansible-vault create vars/vault.yml
 ```
 
-`Execution`: 
+- `Execution`: 
 ```bash
-ansible-playbook playbooks/05_db.yml --ask-vault-pass
-```
-Ou bien, commenter le var_files de la playbook et injecter le vault via -e @vars/vault.yml
-
-```bash
-ansible-playbook playbooks/05_db.yml -e @vars/vault.yml --ask-vault-pass
+ansible-playbook playbooks/06_db.yml --ask-vault-pass
 ```
 
+```bash
+root@controller:/vagrant# ansible-playbook playbooks/06_db.yml --ask-vault-pass
+Vault password: 
+
+PLAY [db] *********************************************************************************************************************************************************************************************************************************
+TASK [db : Install MariaDB] ***************************************************************************************************************************************************************************************************************changed: [node2]
+
+TASK [db : Configure my.cnf] **************************************************************************************************************************************************************************************************************changed: [node2]
+
+TASK [db : Ensure MariaDB running] ********************************************************************************************************************************************************************************************************changed: [node2]
+
+TASK [db : Install PyMySQL (needed by community.mysql)] ***********************************************************************************************************************************************************************************changed: [node2]
+
+TASK [db : Set root password using unix_socket] *******************************************************************************************************************************************************************************************[WARNING]: Option column_case_sensitive is not provided. The default is now false, so the column's name will be uppercased. The default will be changed to true in community.mysql 4.0.0.
+changed: [node2]
+
+TASK [db : Ensure application database exists] ********************************************************************************************************************************************************************************************changed: [node2]
+
+TASK [db : Ensure application user exists with password (from Vault)] *********************************************************************************************************************************************************************changed: [node2]
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node2                      : ok=7    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+```
+- Check DataBase:
+
+```bash
+vagrant@node2:~$ mysql -u root -h localhost -p
+Enter password: 
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 52
+Server version: 10.6.22-MariaDB-0ubuntu0.22.04.1 Ubuntu 22.04
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]> show databases;
++--------------------+
+| Database           |
++--------------------+
+| appdb              |
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+5 rows in set (0.001 sec)
+
+MariaDB [(none)]> quit
+Bye
+vagrant@node2:~$ mysql -u appuser -h localhost -p
+Enter password: 
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 53
+Server version: 10.6.22-MariaDB-0ubuntu0.22.04.1 Ubuntu 22.04
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]> show databases;
++--------------------+
+| Database           |
++--------------------+
+| appdb              |
+| information_schema |
++--------------------+
+2 rows in set (0.000 sec)
+
+MariaDB [(none)]> 
+```
 ---
 
 ## 📌 Jalon 7 — Orchestration complète (stack)
@@ -879,21 +996,122 @@ ansible-playbook playbooks/05_db.yml -e @vars/vault.yml --ask-vault-pass
           ansible.builtin.command: "getent hosts {{ groups['db'][0] }}"
           register: ge
           changed_when: false
-      rescue:
+      rescue: #si la commande getent échoue le DB host n’est pas résolu
         - debug:
             msg: "DB host not resolvable"
-      always:
+      always: #quoi qu’il arrive (succès ou échec) on affiche le message
         - debug:
             msg: "Post-check completed on {{ inventory_hostname }}"
 ```
 `Exemples d’exécution` :
 
 ```bash
-ansible-playbook playbooks/06_stack.yml --tags baseline,db
-ansible-playbook playbooks/06_stack.yml --tags web
-ansible-playbook playbooks/06_stack.yml
-```
+root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  -e @inventories/dev/group_vars/db.yml
+root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  -e @inventories/dev/group_vars/db.yml --tags post-ckeck-db
+root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  -e @inventories/dev/group_vars/db.yml --tags post-ckeck-web
 
+Vault password: 
+
+PLAY [Provision common baseline] **********************************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node2]
+ok: [node1]
+
+TASK [common : Ensure common packages] ****************************************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+TASK [common : Set timezone] **************************************************************************************************************************************************************************************************************ok: [node2]
+ok: [node1]
+
+TASK [common : Deploy MOTD] ***************************************************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+TASK [common : Ensure app user] ***********************************************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+PLAY [Deploy DB] **************************************************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [db : Install MariaDB] ***************************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [db : Configure my.cnf] **************************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [db : Ensure MariaDB running] ********************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [db : Install PyMySQL (needed by community.mysql)] ***********************************************************************************************************************************************************************************ok: [node2]
+
+TASK [db : Ensure application database exists] ********************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [db : Ensure application user exists with password (from Vault)] *********************************************************************************************************************************************************************[WARNING]: Option column_case_sensitive is not provided. The default is now false, so the column's name will be uppercased. The default will be changed to true in community.mysql 4.0.0.
+ok: [node2]
+
+PLAY [Deploy Web] *************************************************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node1]
+
+TASK [web : Install nginx] ****************************************************************************************************************************************************************************************************************ok: [node1]
+
+TASK [web : Push nginx.conf] **************************************************************************************************************************************************************************************************************ok: [node1]
+
+TASK [web : Place index.html] *************************************************************************************************************************************************************************************************************ok: [node1]
+
+TASK [web : Ensure nginx started] *********************************************************************************************************************************************************************************************************ok: [node1]
+
+PLAY [Post-checks Serveur Web] ************************************************************************************************************************************************************************************************************
+TASK [Check HTTP] *************************************************************************************************************************************************************************************************************************ok: [node1]
+
+TASK [debug] ******************************************************************************************************************************************************************************************************************************ok: [node1] => 
+  http.status: '200'
+
+PLAY [Post-check DB] **********************************************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [Wait for DB TCP port] ***************************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [Get DB server info (connectivity + auth)] *******************************************************************************************************************************************************************************************[WARNING]: filter element: threads is not allowable, ignored
+ok: [node2]
+
+TASK [Assert we can connect and read server info] *****************************************************************************************************************************************************************************************ok: [node2] => changed=false 
+  msg: 'DB OK avec version: {''major'': 10, ''minor'': 6, ''release'': 22, ''suffix'': ''MariaDB-0ubuntu0'', ''full'': ''10.6.22-MariaDB-0ubuntu0.22.04.1''}'
+
+TASK [Vérifier que la base existe] ********************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [Assert DB appdb présente] ***********************************************************************************************************************************************************************************************************ok: [node2] => changed=false 
+  msg: DB appdb est présente
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node1                      : ok=12   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+node2                      : ok=18   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+root@controller:/vagrant# 
+```
+- Exécution 2
+
+```bash
+root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  -e @inventories/dev/group_vars/db.yml --tags post-ckeck-db
+Vault password: 
+
+PLAY [Provision common baseline] **********************************************************************************************************************************************************************************************************
+PLAY [Deploy DB] **************************************************************************************************************************************************************************************************************************
+PLAY [Deploy Web] *************************************************************************************************************************************************************************************************************************
+PLAY [Post-checks Serveur Web] ************************************************************************************************************************************************************************************************************
+PLAY [Post-check DB] **********************************************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [Wait for DB TCP port] ***************************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [Get DB server info (connectivity + auth)] *******************************************************************************************************************************************************************************************[WARNING]: filter element: threads is not allowable, ignored
+ok: [node2]
+
+TASK [Assert we can connect and read server info] *****************************************************************************************************************************************************************************************ok: [node2] => changed=false 
+  msg: 'DB OK avec version: {''major'': 10, ''minor'': 6, ''release'': 22, ''suffix'': ''MariaDB-0ubuntu0'', ''full'': ''10.6.22-MariaDB-0ubuntu0.22.04.1''}'
+
+TASK [Vérifier que la base existe] ********************************************************************************************************************************************************************************************************ok: [node2]
+
+TASK [Assert DB appdb présente] ***********************************************************************************************************************************************************************************************************ok: [node2] => changed=false 
+  msg: DB appdb est présente
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node2                      : ok=6    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+root@controller:/vagrant# 
+```
 ---
 
 ## 📌 Jalon 8 — AWX sur K3s (VM dédiée)
@@ -1156,7 +1374,7 @@ http://192.168.56.120:30080
 # user: admin password: t7rMrf5DqLzBPmpURGhBglLL8EnJzYxA
 ```
 **AWX Instance:**
-Voilà un schéma clair du flux AWX (qui fait quoi et dans quel ordre) :
+Voilà un schéma clair du flux AWX :
 
 - AWX Web/API (UI + REST) : interface et API.
 - AWX Task : planifie/orchestre les jobs, déclenche les EE pods (runners), suit l’exécution et les logs.
@@ -1168,7 +1386,7 @@ Voilà un schéma clair du flux AWX (qui fait quoi et dans quel ordre) :
 1. **Projects** → connecter votre repo Git (contenant ce TP)  
 2. **Credentials** → clé SSH (celle qui accède à node1/node2)  
 3. **Inventories** → créer `DEV` avec `node1` et `node2`  
-4. **Job Templates** → `playbooks/06_stack.yml` → Launch  
+4. **Job Templates** → `playbooks/07_stack.yml` → Launch  
 5. Vérifier l’**idempotence** (relancer sans changements)
 
 ---

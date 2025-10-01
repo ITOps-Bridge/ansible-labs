@@ -1,4 +1,4 @@
 - hosts: web
   gather_facts: false
   roles:
-    - web
+  - role: web

@@ -1,0 +1,88 @@
+- name: Provision common baseline
+  hosts: all
+  gather_facts: true
+  roles:
+    - common
+  tags: [baseline]
+
+- name: Deploy DB
+  hosts: db
+  roles:
+    - db
+  tags: [db]
+
+- name: Deploy Web
+  hosts: web
+  roles:
+    - web
+  tags: [web]
+
+- name: Post-checks Serveur Web
+  hosts: web
+  gather_facts: false
+  become: true
+  tags: [post-ckeck-web]
+  tasks:
+    - name: Check HTTP
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:{{ nginx_listen_port }}/"
+        return_content: true
+      register: http
+      failed_when: http.status not in [200] #failed_when Définit quand une tâche doit être considérée comme échouée
+    - debug: var=http.status
+
+- name: Post-check DB
+  hosts: db
+  become: true
+  tags: [post-ckeck-db]
+  vars:
+    db_name: "{{ db_app_name }}"
+    db_user: "{{ db_app_user }}"
+    db_pass: "{{ db_app_password }}"          # vient du Vault
+    db_host: "{{ db_app_host }}"
+    db_port: 3306
+
+  tasks:
+    - name: Wait for DB TCP port
+      ansible.builtin.wait_for:
+        host: "{{ db_host }}"
+        port: "{{ db_port }}"
+        timeout: 30
+
+    - name: Get DB server info (connectivity + auth)
+      community.mysql.mysql_info:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_user: "root"
+        login_password: "{{ mariadb_root_password }}"
+        filter:
+          - version
+          - threads
+      register: dbinfo
+
+    - name: Assert we can connect and read server info
+      ansible.builtin.assert: #une tâche dédiée à la validation
+        that:
+          - dbinfo.version is defined
+        success_msg: "DB OK avec version: {{ dbinfo.version }}"
+        fail_msg: "La DB n'est pas accessible ou version incorrecte"
+        #ignore_errors: true
+
+    - name: Vérifier que la base existe
+      community.mysql.mysql_query:
+        login_host: "{{ db_host }}"
+        login_port: 3306
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_pass }}"
+        query: >
+          SELECT COUNT(*) AS cnt
+          FROM information_schema.SCHEMATA
+          WHERE SCHEMA_NAME='{{ db_name }}';
+      register: dbexists
+
+    - name: Assert DB {{ db_name }} présente
+      ansible.builtin.assert:
+        that:
+          - (dbexists.query_result[0][0].cnt | int) == 1
+        success_msg: "DB {{ db_name }} est présente"
+        fail_msg: "La base {{ db_name }} est absente"

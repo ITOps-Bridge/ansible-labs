@@ -24,16 +24,16 @@
     state: present
   become: true
 
-- name: Secure root password (idempotent)
+- name: Set root password using unix_socket
   community.mysql.mysql_user:
-    login_user: root
-    login_password: ""
     name: root
     host_all: true
     password: "{{ mariadb_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
     check_implicit_admin: true
     state: present
   become: true
+  
 - name: Ensure application database exists
   community.mysql.mysql_db:
     name: "{{ db_app_name }}"
