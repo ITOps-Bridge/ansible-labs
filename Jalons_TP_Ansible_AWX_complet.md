@@ -1,6 +1,6 @@
 # TP Ansible Fil Rouge + AWX Plan Global (2 Jours)
 
-Ce document décrit pas à pas les **jalons** du TP Ansible (2 jours), de la **mise en place Vagrant**
+Ce document décrit pas à pas les **TPs** du TP Ansible (2 jours), de la **mise en place Vagrant**
 jusqu’à l’intégration dans **AWX** sur **k3s**.
 
 Il s'agit de déployer une petite stack “Web + DB” (Nginx + MariaDB) sur 2 nœuds Linux (Ubuntu), avec gestion d’utilisateurs, templating, variables hiérarchisées, rôles, collections, plugins, et finalement exécution via AWX.
@@ -197,7 +197,7 @@ node2 ansible_host=192.168.56.112
 
 ---
 
-## 📌 Jalon 0 — Initialisation & ad-hoc
+## 📌 TP 0 — Initialisation & ad-hoc
 
 **Objectif :** prendre en main l’inventaire et exécuter des commandes ad-hoc.
 
@@ -236,7 +236,7 @@ node2 | SUCCESS => {
 
 ---
 
-## 📌 Jalon 1 — Playbooks, Variables (listes, dictionnaires) Loops & conditions (when)
+## 📌 TP 1 — Playbooks, Variables (listes, dictionnaires) Loops & conditions (when)
 - Creer le repertoire `inventories/dev/group_vars/`
 ```bash
 root@controller:/vagrant# mkdir -p inventories/dev/group_vars/
@@ -390,7 +390,7 @@ root@controller:/vagrant#
 ```
 ---
 
-## 📌 Jalon 2 — Vault Collections & Lookups
+## 📌 TP 2 — Vault Collections & Lookups
 ### Ansible Vault
 `Utiliser le contenu suivant pour creer le  fichier vars/vault_users.yml` :
 ```yaml
@@ -568,7 +568,7 @@ node2                      : ok=4    changed=0    unreachable=0    failed=0    s
 ```
 ---
 
-## 📌 Jalon 3 — Rôle `common`
+## 📌 TP 3 — Rôle `common`
 But : standardiser préparation système via rôle common.
 ```bash
 root@controller:/vagrant# mkdir roles
@@ -665,7 +665,7 @@ root@controller:/vagrant#
 ```
 ---
 
-## 📌 Jalon 4 — Handlers & Rôle `web` (Nginx)
+## 📌 TP 4 — Handlers & Rôle `web` (Nginx)
 - Creer un nouveau `Role web`:
 ```
 root@controller:/vagrant# cd roles/
@@ -769,7 +769,7 @@ PLAY RECAP *********************************************************************
 
 - Acceder à votre serveur nginx via cette URL: http://192.168.56.111/
 
-## 📌 Jalon 6 — Rôle `db` (MariaDB)
+## 📌 TP 5 — Rôle `db` (MariaDB)
 - Creer un nouveau `Role db`:
 ```
 root@controller:/vagrant# ansible-galaxy role init roles/db
@@ -956,9 +956,9 @@ MariaDB [(none)]>
 ```
 ---
 
-## 📌 Jalon 7 — Orchestration complète (stack)
+## 📌 TP 6 — Orchestration complète (stack)
 
-`playbooks/06_stack.yml`
+`playbooks/07_stack.yml`
 ```yaml
 - name: Provision common baseline
   hosts: all
@@ -979,29 +979,75 @@ MariaDB [(none)]>
     - web
   tags: [web]
 
-- name: Post-checks
+- name: Post-checks Serveur Web
   hosts: web
   gather_facts: false
+  become: true
+  tags: [post-ckeck-web]
   tasks:
     - name: Check HTTP
       ansible.builtin.uri:
-        url: "http://{{ inventory_hostname }}:{{ nginx_listen_port }}/"
+        url: "http://{{ ansible_host }}:{{ nginx_listen_port }}/"
         return_content: true
       register: http
-      failed_when: http.status not in [200]
+      failed_when: http.status not in [200] #failed_when Définit quand une tâche doit être considérée comme échouée
     - debug: var=http.status
 
-    - block:
-        - name: Try to resolve DB host
-          ansible.builtin.command: "getent hosts {{ groups['db'][0] }}"
-          register: ge
-          changed_when: false
-      rescue: #si la commande getent échoue le DB host n’est pas résolu
-        - debug:
-            msg: "DB host not resolvable"
-      always: #quoi qu’il arrive (succès ou échec) on affiche le message
-        - debug:
-            msg: "Post-check completed on {{ inventory_hostname }}"
+- name: Post-check DB
+  hosts: db
+  become: true
+  tags: [post-ckeck-db]
+  vars:
+    db_name: "{{ db_app_name }}"
+    db_user: "{{ db_app_user }}"
+    db_pass: "{{ db_app_password }}"          # vient du Vault
+    db_host: "{{ db_app_host }}"
+    db_port: 3306
+
+  tasks:
+    - name: Wait for DB TCP port
+      ansible.builtin.wait_for:
+        host: "{{ db_host }}"
+        port: "{{ db_port }}"
+        timeout: 30
+
+    - name: Get DB server info (connectivity + auth)
+      community.mysql.mysql_info:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_user: "root"
+        login_password: "{{ mariadb_root_password }}"
+        filter:
+          - version
+          - threads
+      register: dbinfo
+
+    - name: Assert we can connect and read server info
+      ansible.builtin.assert: #une tâche dédiée à la validation
+        that:
+          - dbinfo.version is defined
+        success_msg: "DB OK avec version: {{ dbinfo.version }}"
+        fail_msg: "La DB n'est pas accessible ou version incorrecte"
+        #ignore_errors: true
+
+    - name: Vérifier que la base existe
+      community.mysql.mysql_query:
+        login_host: "{{ db_host }}"
+        login_port: 3306
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_pass }}"
+        query: >
+          SELECT COUNT(*) AS cnt
+          FROM information_schema.SCHEMATA
+          WHERE SCHEMA_NAME='{{ db_name }}';
+      register: dbexists
+
+    - name: Assert DB {{ db_name }} présente
+      ansible.builtin.assert:
+        that:
+          - (dbexists.query_result[0][0].cnt | int) == 1
+        success_msg: "DB {{ db_name }} est présente"
+        fail_msg: "La base {{ db_name }} est absente"
 ```
 `Exemples d’exécution` :
 
@@ -1114,7 +1160,7 @@ root@controller:/vagrant#
 ```
 ---
 
-## 📌 Jalon 8 — AWX sur K3s (VM dédiée)
+## 📌 TP 7 — AWX sur K3s (VM dédiée)
 
 Créez une **VM unique** `awx` (4 Go RAM, 2 vCPU conseillés) qui installe **k3s** + **AWX Operator** + **AWX**.
 
