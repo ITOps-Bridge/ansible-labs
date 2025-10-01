@@ -1,0 +1,30 @@
+- name: Manipulations Lookup
+  hosts: all
+  become: true
+  vars:
+    users_file: "../files/users.csv"
+
+  tasks:
+    - name: Lire le CSV (localhost, une fois)
+      community.general.read_csv:
+        path: "{{ users_file }}"
+        fieldnames: username,password,groups
+        delimiter: ','
+      register: csv_users
+      delegate_to: localhost
+
+
+    - name: Afficher la liste des utilisateurs
+      debug:
+        msg: "{{ csv_users }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Lire un fichier avec lookup
+      debug:
+        msg: "{{ lookup('file', '../files/motd.txt') }}"
+      delegate_to: localhost
+
+    - name: Générer un mot de passe aléatoire
+      debug:
+        msg: "{{ lookup('password', '/dev/null length=12 chars=ascii_letters') }}"

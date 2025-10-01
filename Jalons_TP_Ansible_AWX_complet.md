@@ -369,9 +369,9 @@ root@controller:/vagrant#
 ```
 ---
 
-## 📌 Jalon 2 — Lookups & Vault
+## 📌 Jalon 2 — Vault Collections & Lookups
 ### Ansible Vault
-`Crée un fichier vars/vault_users.yml` :
+`Utiliser le contenu suivant pour creer le  fichier vars/vault_users.yml` :
 ```yaml
 vault_users:
   - name: "secretdba"
@@ -381,19 +381,20 @@ vault_users:
 
 `Créer un vault` :
 ```bash
-ansible-vault create vars/vault_users.yml
+$ ansible-vault create vars/vault_users.yml # Sepecifier votre mot de passe vault
+$ ansible-vault edit vars/vault_users.yml
 ```
 
-`Creer un playbook pour utiliser le secret playbooks/02_create_secret_user.yml` :
+`Creer un playbook pour utiliser le secret playbooks/02_vault.yml` :
 ```yaml
 - name: Créer un utilisateur dont le mot de passe est stocké dans Vault
   hosts: all
   become: true
   vars_files:
-    - ../vars/vault.yml
+    - ../vars/vault_users.yml
 
   tasks:
-    - name: Créer utilisateurs sécurisés
+    - name: Créer un utilisateur sécurisé
       user:
         name: "{{ item.name }}"
         password: "{{ item.password | password_hash('sha512') }}" #on utilise le filter password_hash('sha512') pour transformer le mot de passe clair en hash Linux compatible (/etc/shadow).
@@ -405,40 +406,99 @@ ansible-vault create vars/vault_users.yml
 `Exécution` :
 
 ```bash
-ansible-playbook playbooks/02_create_secret_user.yml --ask-vault-pass
-```
+root@controller:/vagrant# ansible-playbook playbooks/02_vault.yml --ask-vault-pass
+Vault password: 
 
-### Lookups
-`Crée un fichier files/users.csv` :
+PLAY [Créer un utilisateur dont le mot de passe est stocké dans Vault] ********************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+TASK [Créer un utilisateur sécurisé] ******************************************************************************************************************************************************************************************************changed: [node1] => (item={'name': 'secretdba', 'password': 'SuperSecret123!', 'groups': 'sudo'})
+changed: [node2] => (item={'name': 'secretdba', 'password': 'SuperSecret123!', 'groups': 'sudo'})
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node1                      : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+node2                      : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+root@controller:/vagrant#
+```
+### Collections
+- Créer le fichier `collections/requirements.yml`
+
+```yaml
+collections:
+  - name: community.general
+    source: https://galaxy.ansible.com
+    version: "8.5.0"
+
+  - name: ansible.posix
+    source: https://galaxy.ansible.com
+    version: "1.5.4"
+
+  - name: community.mysql
+    source: https://galaxy.ansible.com
+    version: "3.9.0"
+```
+`Installation des collections` :
+
 ```bash
-username,password,groups
-alice,Azerty123!,sudo
-bob,ChangeMe123,www-data
-charlie,Passw0rd!,developers
+root@controller:/vagrant# ansible-galaxy collection install -r collections/requirements.yml
+Starting galaxy collection install process
+Process install dependency map
+Starting collection install process
+Downloading https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/artifacts/community-general-8.5.0.tar.gz to /root/.ansible/tmp/ansible-local-15921whvsnabk/tmpdd_bazrz/community-general-8.5.0-430_4dtc
+Installing 'community.general:8.5.0' to '/root/.ansible/collections/ansible_collections/community/general'
+Downloading https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/artifacts/ansible-posix-1.5.4.tar.gz to /root/.ansible/tmp/ansible-local-15921whvsnabk/tmpdd_bazrz/ansible-posix-1.5.4-od3u2fqq
+community.general:8.5.0 was installed successfully
+Installing 'ansible.posix:1.5.4' to '/root/.ansible/collections/ansible_collections/ansible/posix'
+ansible.posix:1.5.4 was installed successfully
+Downloading https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/artifacts/community-mysql-3.9.0.tar.gz to /root/.ansible/tmp/ansible-local-15921whvsnabk/tmpdd_bazrz/community-mysql-3.9.0-rhkyj6g_
+Installing 'community.mysql:3.9.0' to '/root/.ansible/collections/ansible_collections/community/mysql'
+community.mysql:3.9.0 was installed successfully
+root@controller:/vagrant# 
+root@controller:/vagrant# ls /root/.ansible/
+collections/  cp/           galaxy_cache/ galaxy_token  tmp/
+root@controller:/vagrant#
+```
+### Lookups
+`Crée un fichier files/motd.txt` :
+```bash
+Bienvenue sur le serveur Ansible !
 ```
 - Ici chaque ligne = un utilisateur, avec son mot de passe en clair (le fichier sera ensuite protégé par Ansible Vault si nécessaire).
 
-`Creer un playbook  playbooks/01_setup_users_csv.yml` :
+`Creer un playbook  playbooks/03_lookups.yml` :
 ```yaml
-- name: Créer des utilisateurs à partir d'un CSV
+- name: Manipulations Lookup
   hosts: all
   become: true
   vars:
     users_file: "../files/users.csv"
 
   tasks:
-    - name: Lire le CSV
-      set_fact:
-        csv_users: "{{ lookup('community.general.csvfile', users_file, dialect='excel', delimiter=',', key='username') }}"
+    - name: Lire le CSV (localhost, une fois)
+      community.general.read_csv:
+        path: "{{ users_file }}"
+        fieldnames: username,password,groups
+        delimiter: ','
+      register: csv_users
       delegate_to: localhost
 
-    - name: Créer les comptes utilisateurs
-      ansible.builtin.user:
-        name: "{{ item.key }}"
-        password: "{{ item.value.password | password_hash('sha512') }}"
-        groups: "{{ item.value.groups }}"
-        state: present
-      loop: "{{ csv_users | dict2items }}"
+
+    - name: Afficher la liste des utilisateurs
+      debug:
+        msg: "{{ csv_users }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Lire un fichier avec lookup
+      debug:
+        msg: "{{ lookup('file', '../files/motd.txt') }}"
+      delegate_to: localhost
+      
+
+    - name: Générer un mot de passe aléatoire
+      debug:
+        msg: "{{ lookup('password', '/dev/null length=12 chars=ascii_letters') }}"
 ```
 - loop: "{{ csv_users | dict2items }}" permet de boucler sur chaque ligne (clé = username).
 - password_hash('sha512') est nécessaire car Ansible user.password attend un hash
@@ -446,13 +506,60 @@ charlie,Passw0rd!,developers
 `Exécution` :
 
 ```bash
-ansible-playbook playbooks/01_setup_users_csv.yml
+root@controller:/vagrant# ansible-playbook playbooks/03_lookups.yml 
+
+PLAY [Manipulations Lookup] *******************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+TASK [Lire le CSV (localhost, une fois)] **************************************************************************************************************************************************************************************************ok: [node1 -> localhost]
+ok: [node2 -> localhost]
+
+TASK [Afficher la liste des utilisateurs] *************************************************************************************************************************************************************************************************ok: [node1 -> localhost] => 
+  msg:
+    changed: false
+    dict: {}
+    failed: false
+    list:
+    - groups: groups
+      password: password
+      username: username
+    - groups: sudo
+      password: Azerty123!
+      username: erick
+    - groups: www-data
+      password: ChangeMe123
+      username: benoit
+    - groups: developers
+      password: Passw0rd!
+      username: charlie
+
+TASK [Lire un fichier avec lookup] ********************************************************************************************************************************************************************************************************ok: [node1 -> localhost] => 
+  msg: Bienvenue sur le serveur Ansible !
+ok: [node2 -> localhost] => 
+  msg: Bienvenue sur le serveur Ansible !
+
+TASK [Générer un mot de passe aléatoire] **************************************************************************************************************************************************************************************************ok: [node1] => 
+  msg: kpxofZzfPhSR
+ok: [node2] => 
+  msg: BlEPZjKimlmd
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node1                      : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+node2                      : ok=4    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
 ```
 ---
 
-## 📌 Jalon 3 — Collections, Modules & Rôle `common`
+## 📌 Jalon 3 — Rôle `common`
 But : standardiser préparation système via rôle common.
-
+```bash
+root@controller:/vagrant# mkdir roles
+root@controller:/vagrant# cd roles/
+root@controller:/vagrant/roles# ansible-galaxy role init common
+- Role common was created successfully
+root@controller:/vagrant/roles# ls common/
+README.md  defaults  files  handlers  meta  tasks  templates  tests  vars
+root@controller:/vagrant/roles#
+```
 Exemple rôle `roles/common/` 
 
 `roles/common/defaults/main.yml` :
@@ -498,29 +605,44 @@ timezone: "Europe/Paris"
 Env: {{ app_env }}
 ```
 
-`collections/requirements.yml`
-```yaml
-collections:
-  - name: community.general
-  - name: ansible.posix
-  - name: community.mysql
-```
 
-`Playbook 02_hardening.yml` :
+
+`Playbook 04_hardening.yml` :
 
 ```yaml
 - name: System baseline via common role
   hosts: all
   gather_facts: true
+  become: yes
   roles:
-    - role: common
+  - role: common
 ```
 
 `Exécution` :
 
 ```bash
-ansible-galaxy collection install -r collections/requirements.yml
-ansible-playbook playbooks/01_setup_users.yml
+root@controller:/vagrant# ansible-playbook playbooks/04_hardening.yml
+
+PLAY [System baseline via common role] ****************************************************************************************************************************************************************************************************
+TASK [Gathering Facts] ********************************************************************************************************************************************************************************************************************ok: [node1]
+ok: [node2]
+
+TASK [common : Ensure common packages] ****************************************************************************************************************************************************************************************************ok: [node2]
+ok: [node1]
+
+TASK [common : Set timezone] **************************************************************************************************************************************************************************************************************changed: [node1]
+changed: [node2]
+
+TASK [common : Deploy MOTD] ***************************************************************************************************************************************************************************************************************changed: [node1]
+changed: [node2]
+
+TASK [common : Ensure app user] ***********************************************************************************************************************************************************************************************************changed: [node2]
+changed: [node1]
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************************************node1                      : ok=5    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+node2                      : ok=5    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+root@controller:/vagrant# 
 ```
 ---
 

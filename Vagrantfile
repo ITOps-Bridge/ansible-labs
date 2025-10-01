@@ -15,7 +15,7 @@ Vagrant.configure("2") do |config|
       sudo apt-get update -y
       sudo apt-get install -y python3-pip
       python3 -m pip install --upgrade pip
-      pip install ansible
+      pip install ansible passlib
       sudo apt-get install -y  git sshpass
       mkdir -p /vagrant/ssh
       if [ ! -f /vagrant/ssh/id_rsa ]; then

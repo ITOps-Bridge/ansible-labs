@@ -5,7 +5,7 @@
     - ../vars/vault_users.yml
 
   tasks:
-    - name: Créer utilisateurs sécurisés
+    - name: Créer des utilisateurs sécurisés
       user:
         name: "{{ item.name }}"
         password: "{{ item.password | password_hash('sha512') }}" #on utilise le filter password_hash('sha512') pour transformer le mot de passe clair en hash Linux compatible (/etc/shadow).
