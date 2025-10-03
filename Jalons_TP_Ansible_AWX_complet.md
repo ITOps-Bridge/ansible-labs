@@ -870,7 +870,18 @@ bind-address = {{ mariadb_bind_address }}
     - db
 ```
 
-- `Mettre les secrets DB dans le vault (chiffré)`: 
+- `Mettre les secrets DB dans le vault (chiffré) vars/vault.yml` : 
+```yaml
+mariadb_bind_address: "0.0.0.0"
+# Secrets DB (exemple)
+db_app_name: "appdb"            # nom de la base
+db_app_user: "appuser"          # utilisateur applicatif
+db_app_password: "Str0ngPass!"  # MOT DE PASSE EN CLAIR (chiffré par le vault au repos)
+db_app_host: "localhost"             
+# (optionnel) surcharger le root si tu préfères le mettre aussi dans Vault :
+mariadb_root_password: "ChangeMeRoot"
+```
+
 ```bash
 ansible-vault create vars/vault.yml
 ```
