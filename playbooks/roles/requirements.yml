@@ -1,7 +1,0 @@
-roles:
-  - name: common
-    src: ../../roles/common
-  - name: web
-    src: ../../roles/web
-  - name: db
-    src: ../../roles/db
