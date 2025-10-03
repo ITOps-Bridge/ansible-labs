@@ -1058,8 +1058,8 @@ MariaDB [(none)]>
 `Exemples d’exécution` :
 
 ```bash
-root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  -e @inventories/dev/group_vars/db.yml
-root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  -e @inventories/dev/group_vars/db.yml --tags post-ckeck-db
+root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass
+root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  --tags post-ckeck-db
 root@controller:/vagrant# ansible-playbook playbooks/07_stack.yml --ask-vault-pass  -e @inventories/dev/group_vars/db.yml --tags post-ckeck-web
 
 Vault password: 
