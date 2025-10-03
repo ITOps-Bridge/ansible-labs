@@ -1,0 +1,26 @@
+- name: Ensure common packages
+  ansible.builtin.package:
+    name: "{{ common_packages }}"
+    state: present
+  become: true
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+  become: true
+
+- name: Deploy MOTD
+  ansible.builtin.template:
+    src: motd.j2
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Ensure app user
+  ansible.builtin.user:
+    name: app
+    shell: /bin/bash
+    create_home: true
+  become: true
