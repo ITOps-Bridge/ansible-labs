@@ -6,7 +6,7 @@
 4) Créer un *Job Template* :
    - Inventory: DEV
    - Project: Fil Rouge
-   - Playbook: `playbooks/05_stack.yml`
+   - Playbook: `playbooks/07_stack.yml`
    - Credentials: SSH
    - Options: "Enable privilege escalation"
    - (Option) Survey: importer `awx/survey.json`.
