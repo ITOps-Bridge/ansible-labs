@@ -1,0 +1,2 @@
+common_motd: "Bienvenue sur {{ inventory_hostname }} ({{ project_name }})"
+timezone: "Europe/Paris"

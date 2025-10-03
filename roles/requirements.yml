@@ -1,7 +1,0 @@
-roles:
-  - name: common
-    src: ./common
-  - name: web
-    src: ./web
-  - name: db
-    src: ./db
