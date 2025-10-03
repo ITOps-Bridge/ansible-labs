@@ -859,7 +859,7 @@ db_app_host: "localhost"
 bind-address = {{ mariadb_bind_address }}
 ```
 
-`playbooks/05_db.yml` :
+`playbooks/06_db.yml` :
 ```yaml
 - hosts: db
   gather_facts: false
