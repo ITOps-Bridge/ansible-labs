@@ -1,2 +1,0 @@
-nginx_listen_port: 8080
-server_name: "{{ inventory_hostname }}"
