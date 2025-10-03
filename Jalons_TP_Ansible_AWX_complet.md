@@ -745,16 +745,7 @@ server {
   roles:
   - role: web
 ```
-- Encrypter avec Ansible Vault les vars du role db
-```bash
-root@controller:/vagrant# ansible-vault encrypt inventories/dev/group_vars/db.yml
-New Vault password:
-Confirm New Vault password:
-Encryption successful
-root@controller:/vagrant# ansible-vault edit inventories/dev/group_vars/db.yml
-Vault password:
-root@controller:/vagrant# 
-```
+
 - `Execution`: 
 ```bash
 root@controller:/vagrant# ansible-playbook playbooks/05_web.yml 
