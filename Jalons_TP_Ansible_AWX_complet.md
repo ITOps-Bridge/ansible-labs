@@ -733,6 +733,11 @@ server {
   }
 }
 ```
+
+- `roles/web/files/index.html`
+```
+<h1>It works! Fil rouge Nginx</h1>
+```
 - `playbooks/05_web.yml` :
 ```yaml
 - hosts: web
