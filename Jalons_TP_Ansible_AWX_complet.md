@@ -789,7 +789,6 @@ db_app_host: "localhost"
 `roles/db/tasks/main.yml` :
 ```yaml
 - name: Install MariaDB
-- name: Install MariaDB
   ansible.builtin.package:
     name: mariadb-server
     state: present
